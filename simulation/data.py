@@ -1,7 +1,4 @@
-#!/usr/bin/env python3
-
-# need dev-python/pytables
-# need dev-python/blosc
+#!/usr/bin/env python3.6
 
 from tables import IsDescription, Float32Col, Float64Col, open_file
 from tempfile import mktemp

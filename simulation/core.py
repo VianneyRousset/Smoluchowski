@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.6
 
 from .utils import divergence
 from scipy.ndimage.filters import laplace

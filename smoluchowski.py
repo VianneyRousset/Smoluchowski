@@ -1,12 +1,30 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3.6
 
 import simulation
 import simulation.utils as ut
 
 import numpy as np
 import scipy.constants as const
-from sys import exit
+from sys import argv, exit
 from os import remove
+
+
+def load_data(prefix, res):
+    fields = {
+            'V':        'ElectrostaticPotential',
+            'mu_e':     'eMobility',
+            'mu_h':     'hMobility',
+            'G':        'TotalRecombination',
+            'tau_e':    'eLifetime',
+            'tau_h':    'hLifetime',
+            }
+    data = {f:load_field(f'input/n{node}_{fname}.txt', res) for f,fname in fields.items()}
+    fields = {k:v[2] for k,v in data.items()}
+    lim = [i[0] for i in data.values()]
+    XYZ = [i[1] for i in data.values()]
+
+
+
 
 
 def load_field(path, res):
@@ -22,6 +40,13 @@ def max_deviation(v):
 
 
 if __name__ == '__main__':
+    
+    if len(argv) < 1:
+
+
+
+    print('* Loading fields')
+    data = load_data()
 
     res = 0.05
     node = '1130'
@@ -30,20 +55,6 @@ if __name__ == '__main__':
     t = 0.1e-6
     data_file_path = 'output/data.h5'
 
-    # load fields
-    print('* Loading fields')
-    fields = {
-            'V':        'ElectrostaticPotential',
-            'mu_e':     'eMobility',
-            'mu_h':     'hMobility',
-            'G':        'TotalRecombination',
-            'tau_e':    'eLifetime',
-            'tau_h':    'hLifetime',
-            }
-    data = {f:load_field(f'input/n{node}_{fname}.txt', res) for f,fname in fields.items()}
-    fields = {k:v[2] for k,v in data.items()}
-    lim = [i[0] for i in data.values()]
-    XYZ = [i[1] for i in data.values()]
 
     ## check deviation on lim
     print('** Checking max lim deviation... ', end='')

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3.6
 
 from simulation import Simulation
 from simulation.utils import meshgrid_from_lim, single_point

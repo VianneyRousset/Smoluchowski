@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python3.6
 
 def spread(v, shape, mode='const'):
     from numpy import ones, isscalar

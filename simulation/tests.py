@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.6
 
 from scipy.integrate import ode
 from scipy.ndimage.filters import laplace

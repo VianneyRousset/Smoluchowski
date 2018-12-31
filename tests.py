@@ -5,6 +5,7 @@ from simulation.utils import meshgrid_from_lim, gaussian_dot
 import numpy as np
 from numpy.linalg import norm
 from matplotlib import pyplot as plt
+from sys import argv
 
 
 def test_gaussian(dim, mu, D, Ex):
@@ -114,38 +115,46 @@ def get_dx(*args):
 
 if __name__ == '__main__':
 
-	tests = ('static', 'diffusion', 'drift', 'drift-diffusion')
-	dimensions = [1,2,3]
-	err = []
+    dimensions_default = [1,2,3]
+    dimensions = [i for i in dimensions_default if f'{i}D' in argv]
+    if len(dimensions) == 0:
+        dimensions = dimensions_default
 
-	if 'static' in tests:
-		for dim in dimensions:
-			print(f'* Testing static ({dim}D)')
-			err += [test_gaussian(dim=dim, mu=1, D=0, Ex=0)]
+    tests_default = ['static', 'diffusion', 'drift', 'drift-diffusion']
+    tests = [i for i in tests_default if i in argv]
+    if len(tests) == 0:
+        tests = tests_default
 
-	if 'diffusion' in tests:
-		for D in [0.1, 0.5]:
-			for dim in dimensions:
-				print(f'* Testing diffusion ({dim}D) with D = {D:.2e}')
-				err += [test_gaussian(dim=dim, mu=1, D=D, Ex=0)]
+    err = []
 
-	if 'drift' in tests:
-		for Ex in [0.1, 0.5, -0.5]:
-			for dim in dimensions:
-				print(f'* Testing drift ({dim}D) with Ex = {Ex:.2e}')
-				err += [test_gaussian(dim=dim, mu=1, D=0, Ex=Ex)]
+    if 'static' in tests:
+        for dim in dimensions:
+            print(f'* Testing static ({dim}D)')
+            err += [test_gaussian(dim=dim, mu=1, D=0, Ex=0)]
 
-	if 'drift-diffusion' in tests:
-		for mu,D,Ex in [(1.0, 0.5, 0.1), (1.0, 0.5, 0.5),
-				(0.1, 0.5, -0.5), (1.0, 0.5, -0.5)]:
-			for dim in dimensions:
-				print(f'* Testing drift-diffusion ({dim}D) with mu = {mu:.2e}'
-						f', D = {D:.2e} and Ex = {Ex:.2e}')
-				err += [test_gaussian(dim=dim, mu=mu, D=D, Ex=Ex)]
+    if 'diffusion' in tests:
+        for D in [0.1, 0.5]:
+            for dim in dimensions:
+                print(f'* Testing diffusion ({dim}D) with D = {D:.2e}')
+                err += [test_gaussian(dim=dim, mu=1, D=D, Ex=0)]
+
+    if 'drift' in tests:
+        for Ex in [0.1, 0.5, -0.5]:
+            for dim in dimensions:
+                print(f'* Testing drift ({dim}D) with Ex = {Ex:.2e}')
+                err += [test_gaussian(dim=dim, mu=1, D=0, Ex=Ex)]
+
+    if 'drift-diffusion' in tests:
+        for mu,D,Ex in [(1.0, 0.5, 0.1), (1.0, 0.5, 0.5),
+                (0.1, 0.5, -0.5), (1.0, 0.5, -0.5)]:
+            for dim in dimensions:
+                print(f'* Testing drift-diffusion ({dim}D) with mu = {mu:.2e}'
+                        f', D = {D:.2e} and Ex = {Ex:.2e}')
+                err += [test_gaussian(dim=dim, mu=mu, D=D, Ex=Ex)]
 
 
-	# print summary
-	import sys
-	print('* Error summary in percent:')
-	err= np.array(err).reshape(-1, len(dimensions))
-	np.savetxt(sys.stdout, 100*err.T, fmt='%.3e')
+    # print summary
+    import sys
+    print('* Error summary in percent:')
+    err= np.array(err).reshape(-1, len(dimensions))
+    np.savetxt(sys.stdout, 100*err.T, fmt='%.3e')
