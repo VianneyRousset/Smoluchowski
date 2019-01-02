@@ -48,12 +48,14 @@ class Simulation:
         # dynamic
         dynamic = {
                 'p': kwargs['p0'],
+                'a': 0
                 }
 
-        ## dynamic fields
-        dynamic_fields = dynamic
+        ## dynamic scalars and fields
+        dynamic_scalars = {k:v for k,v in dynamic.items() if v is not None and isscalar(v)}
+        dynamic_fields = {k:v for k,v in dynamic.items() if v is not None and not isscalar(v)}
         dynamic_fields = self._add_padding(dynamic_fields, padding)
-        self.data.init_dynamic_scalars_and_fields(shape, {}, dynamic_fields)
+        self.data.init_dynamic_scalars_and_fields(shape, dynamic_scalars, dynamic_fields)
 
         # usefull variables
         self.shape = atleast_1d(static_fields['X']).shape
@@ -80,6 +82,11 @@ class Simulation:
         self._setup_simulation(self.data[0,'p'])
         progress = ProgressBar()
 
+        # computation times reset
+        self.tcomp_var   = 0
+        self.tcomp_diff  = 0
+        self.tcomp_drift = 0
+
         if not self.quiet:
             print('* Starting simulation')
 
@@ -90,7 +97,7 @@ class Simulation:
             p = self.r.integrate(self.r.t + self.data['dt'])
             p = p.reshape(self.shape)
             if type(sampling) is not str and (n % sampling) == 0:
-                self.data.snapshot(self.r.t, p=p)
+                self.data.snapshot(self.r.t, p=p, a=0)
             n = n + 1
         progress.end()
 
@@ -99,6 +106,9 @@ class Simulation:
 
         if not self.quiet:
             print('* Done after {:.2f}s'.format(time.time() - start_time))
+            print('** Variable computation time : {:.2f}s'.format(self.tcomp_var))
+            print('** Diffusion computation time : {:.2f}s'.format(self.tcomp_diff))
+            print('** Drift computation time : {:.2f}s'.format(self.tcomp_drift))
 
     
     def export_field_image(self, field, path, log=False, title=None,
@@ -126,7 +136,6 @@ class Simulation:
             clim = self._get_clim(log=log)
             if not self.quiet:
                 print('* Done')
-            print('-----> ', clim)
         if log:
             clim = [max([l,log_min_value]) for l in clim]
             clim = log10(clim)

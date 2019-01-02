@@ -17,13 +17,11 @@ def meshgrid_from_lim(shape, *args):
     return meshgrid(*[linspace(*lim,s) for lim,s in zip(args, shape)])
 
 
-def divergence(d, *args):
-    import numpy as np
-    dim = len(args)
-    if dim == 1:
-        return np.gradient(args[0], *d)
-    return np.sum([np.gradient(p, *d)[n] for n,p in enumerate(args)], axis=0)
-
+def divergence(v, d):
+    from numpy import ufunc, add, gradient
+    dim = len(v)
+    return ufunc.reduce(add, [gradient(v[i], d[i], axis=i)
+        for i in range(dim)])
 
 def perlin_noise(shape, blur):
     from scipy.ndimage import gaussian_filter
