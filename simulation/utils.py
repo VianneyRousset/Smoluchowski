@@ -18,9 +18,11 @@ def meshgrid_from_lim(shape, *args):
 
 
 def divergence(v, d):
-    from numpy import ufunc, add, gradient
+    from numpy import ufunc, add, gradient, atleast_2d
     dim = len(v)
-    return ufunc.reduce(add, [gradient(v[i], d[i], axis=i)
+    if dim == 1:
+        return gradient(v[0], *d)
+    return ufunc.reduce(add, [atleast_2d(gradient(v[i], d[i], axis=i))
         for i in range(dim)])
 
 def perlin_noise(shape, blur):

@@ -2,7 +2,7 @@
 
 from .utils import divergence
 from scipy.ndimage.filters import laplace
-from numpy import sum, power, gradient
+from numpy import sum, power, gradient, atleast_2d
 import time
 
 def solvr(t, p, sim):
@@ -18,9 +18,9 @@ def solvr(t, p, sim):
     t2 = time.clock()
 
     # math
-    dp = divergence(D * gradient(p, *sim.d), sim.d)
+    diff = divergence(atleast_2d(gradient(p, *sim.d))*D, sim.d)
     t3 = time.clock()
-    dp = divergence([mu*p*E for E in sim.E], sim.d)
+    drift = divergence([mu*p*E for E in sim.E], sim.d)
     t4 = time.clock()
 
     # saving computation time 
