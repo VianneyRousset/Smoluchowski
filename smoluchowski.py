@@ -9,101 +9,74 @@ from sys import argv, exit
 from os import remove
 
 
-def load_data(prefix, res):
+def load_data(prefix, res, crop=None):
     fields = {
             'V':        'ElectrostaticPotential',
             'mu_e':     'eMobility',
             'mu_h':     'hMobility',
-            'G':        'TotalRecombination',
+            'R':        'TotalRecombination',
             'tau_e':    'eLifetime',
             'tau_h':    'hLifetime',
+            'a_e':      'eAlphaAvalanche',
+            'a_h':      'hAlphaAvalanche',
             }
-    data = {f:load_field(f'input/n{node}_{fname}.txt', res) for f,fname in fields.items()}
+    data = {f:load_field(f'{prefix}{fname}.txt', res, crop)
+            for f,fname in fields.items()}
     fields = {k:v[2] for k,v in data.items()}
-    lim = [i[0] for i in data.values()]
-    XYZ = [i[1] for i in data.values()]
+    lim = np.array([i[0] for i in data.values()][0])
+    XYZ = np.array([i[1] for i in data.values()][0])
+    return fields,lim,XYZ
 
 
-
-
-
-def load_field(path, res):
+def load_field(path, res, crop=None):
     data = np.loadtxt(path, unpack=True)
     xyz,f = data[:-1],data[-1]
-    return ut.rasterized_region(tuple(xyz), f, res)
-
-
-def max_deviation(v):
-    v = np.array(v)
-    vmean = np.mean(v, axis=0)
-    return np.max(np.abs(v - vmean))
+    return ut.rasterized_region(tuple(xyz), f, res, crop)
 
 
 if __name__ == '__main__':
+
+    ROI = [(0,6), (0,2)]
     
-    if len(argv) < 1:
-
-
-
-    print('* Loading fields')
-    data = load_data()
-
+    # read arguments
+    if len(argv) < 2:
+        ut.printerr(f'Usage: {argv[0]} prefix [res] \n'
+                'For example, \'./smoluchowski.py n20_ 0.05\' will '
+                'use files starting with \'n20_\' a 0.05um resolution')
+        exit(1)
+    prefix = argv[1]
     res = 0.05
-    node = '1130'
-    maxdev = 1e-9
-    dt = 1e-9
-    t = 0.1e-6
-    data_file_path = 'output/data.h5'
+    if len(argv) > 2:
+        res = float(argv[2])
 
+    # load data
+    print('* Loading fields')
+    fields,lim,XYZ = load_data(prefix, res, crop=ROI)
 
-    ## check deviation on lim
-    print('** Checking max lim deviation... ', end='')
-    m = max_deviation(lim)
-    if  m < maxdev:
-        print(f'OK ({m} < {maxdev})')
-    else:
-        print(f'FAIL ({m} > {maxdev})')
-        exit(1)
-
-    ## check deviation on XYZ
-    print('** Checking max XYZ deviation... ', end='')
-    m = max_deviation(XYZ)
-    if  m < maxdev:
-        print(f'OK ({m} < {maxdev})')
-    else:
-        print(f'FAIL ({m} > {maxdev})')
-        exit(1)
-
-    lim = np.mean(lim, axis=0)
-    XYZ = np.mean(XYZ, axis=0) 
-    
-    # some constants
-#    p0 = fields['G']
-    p0 = ut.single_dot([2, 1.5], *XYZ)
-    V = fields['V']
+    # simulation
+    print('* Inititializing simulator')
+    dt  = 100e-9
+    t   = np.mean(fields['tau_e'])
+    p0  = -(fields['R'] * (fields['R'] < 0))
+    V   = fields['V']
     mu = fields['mu_e'] * 1e4 # cm^2 * V^-1 * s^-1 -> um^2 * V^-1 * s^-1
     k,T = const.k, 300
     D = mu*k*T/const.e
     X,Y = XYZ
-    tau = np.mean(fields['tau_e'])
 
-    print('** V (mean)\t= {: .2e}'.format(np.mean(V)))
+    sim = simulation.Simulation()
+    sim.init(shape=X.shape, dt=dt, p0=p0, V=V, D=D, mu=mu, X=X, Y=Y)
+
+    print('** V (min)\t= {: .2e}'.format(np.min(V)))
+    print('** V (max)\t= {: .2e}'.format(np.max(V)))
     print('** mu (mean)\t= {: .2e}'.format(np.mean(mu)))
     print('** D (mean)\t= {: .2e}'.format(np.mean(D)))
-    print('** tau (mean)\t= {: .2e}'.format(tau))
-
-    # init simulator
-    print('* Inititializing simulator')
-    try:
-        remove(data_file_path)
-    except:
-        pass
-    sim = simulation.Simulation(data_file_path)
-    sim.init(shape=XYZ[0].shape, dt=dt, p0=p0, V=V, D=D, mu=mu, X=X, Y=Y)
+    print('** tau (mean)\t= {: .2e}'.format(t))
+    print('** Size [px]\t=  {}x{}'.format(*sim.XYZ[0].shape))
 
     # starting simulation
     print('* Starting simulation')
-    sim.run(t, sampling=100)
+    sim.run(t, sampling=1)
 
     # export images
     print('* Exporting images')

@@ -32,6 +32,9 @@ class Simulation:
                 'V': kwargs.get('V', 0),
                 }
 
+        dim = get_dim(static)
+        XYZ = [static[x] for x in 'XYZ'[:dim]]
+
         ## static scalars 
         static_scalars = {k:v for k,v in static.items() if v is not None and isscalar(v)}
         self.data.init_static_scalars(static_scalars)
@@ -240,6 +243,8 @@ class Simulation:
                 'p': 'constant',
                     }
 
-        if padding is not None:
-            return {k:pad(fields[k], width=padding, mode=modes[k]) for k in fields}
-        return fields
+        if padding is None:
+            return fields
+
+        return {k:pad(fields[k], width=padding, mode=modes[k]) for k in fields}
+

@@ -93,13 +93,14 @@ def load_grd(path, region, header_limit=100):
     return vertices
 
 
-def rasterized_region(points, values, resolution, method='linear'):
+def rasterized_region(points, values, resolution, crop=None, method='linear'):
     from scipy.interpolate import griddata
     from numpy import meshgrid, linspace, diff
     dim = len(points)
-    lim = [(min(i), max(i)) for i in points]
-    XYZ = meshgrid(*[linspace(*l, abs(diff(l))/resolution) for l in lim])
-    return lim, XYZ, griddata(points, values, tuple(XYZ), method='linear')
+    if crop is None:
+        crop = [(min(i), max(i)) for i in points]
+    XYZ = meshgrid(*[linspace(*l, abs(diff(l))/resolution) for l in crop])
+    return crop, XYZ, griddata(points, values, tuple(XYZ), method='linear')
 
 
 def single_dot(pos, *args):
@@ -144,7 +145,8 @@ def get_dx(*args):
 
 
 def printerr(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
+    from sys import stderr
+    print(*args, file=stderr, **kwargs)
 
 
 def pad(v, width, mode='constant'):
@@ -161,3 +163,4 @@ def pad(v, width, mode='constant'):
         mode = padding_xyz
 
     return pad(v, width, mode)
+
