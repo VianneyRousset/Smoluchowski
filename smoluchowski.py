@@ -65,7 +65,7 @@ if __name__ == '__main__':
     X,Y = XYZ
 
     sim = simulation.Simulation()
-    sim.init(shape=X.shape, dt=dt, p0=p0, V=V, D=D, mu=mu, X=X, Y=Y)
+    sim.init(shape=X.shape, dt=dt, p0=p0, V=V, D=D, mu=mu, X=X, Y=Y, padding=[(0, 1), (1, 1)])
 
     print('** V (min)\t= {: .2e}'.format(np.min(V)))
     print('** V (max)\t= {: .2e}'.format(np.max(V)))

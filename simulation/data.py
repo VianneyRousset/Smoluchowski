@@ -131,8 +131,8 @@ class SimData:
         if [r for r in self.tab_dynamic_fields.where(f't == {t}')]:
             raise ValueError(f'Snapshot at t={t} already exists')
         if set(kwargs) != self.dynamic_scalars.union(self.dynamic_fields):
-            raise ValueError(f'Invalid or missing keyword arguments '
-            '(got {repr(set(kwargs))})')
+            raise ValueError('Invalid or missing keyword arguments '
+            f'(got {repr(set(kwargs))})')
 
         # setting scalars
         row = self.tab_dynamic_scalars.row

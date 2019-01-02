@@ -102,7 +102,7 @@ class Simulation:
         progress.end()
 
         if sampling == 'last':
-            self.data.snapshot(self.r.t, p=p)
+            self.data.snapshot(self.r.t, p=p, a=0)
 
         if not self.quiet:
             print('* Done after {:.2f}s'.format(time.time() - start_time))
@@ -246,10 +246,11 @@ class Simulation:
                 'X': 'xyz',
                 'Y': 'xyz',
                 'Z': 'xyz',
-                'D': 'edge',
+                'D': 'constant',
                 'g': 'edge',
                 'V': 'edge',
                 'p': 'constant',
+                'mu': 'constant'
                     }
 
         if padding is None:
