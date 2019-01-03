@@ -8,10 +8,11 @@ __all__ = ['utils']
 
 class Simulation:
 
-    def __init__(self, filename=None, quiet=False):
+    def __init__(self, filename=None, quiet=False, mode='electron'):
         from .data import SimData
         self.quiet = quiet
         self.data = SimData(filename, mode='a')
+        self.mode = mode
 
 
     def init(self, dt, padding=None, **kwargs):
@@ -30,6 +31,9 @@ class Simulation:
                 'D': kwargs.get('D', 0),
                 'mu': kwargs.get('mu', 1),
                 'V': kwargs.get('V', 0),
+                'a_e': kwargs.get('a_e', 0),
+                'a_h': kwargs.get('a_h', 0),
+                'a_region': kwargs.get('a_region', 0),
                 }
 
         dim = get_dim(static)
@@ -58,6 +62,7 @@ class Simulation:
         self.data.init_dynamic_scalars_and_fields(shape, dynamic_scalars, dynamic_fields)
 
         # usefull variables
+        self.a = 0
         self.shape = atleast_1d(static_fields['X']).shape
         self.lim = get_lim(*self.XYZ)
         self.d = get_dx(*self.XYZ)
@@ -88,7 +93,7 @@ class Simulation:
         self.tcomp_drift = 0
 
         if not self.quiet:
-            print('* Starting simulation')
+            print('* Starting simulation (goal: {:.2e}s)'.format(t))
 
         n = 1
         while self.r.successful() and self.r.t < t:
@@ -97,12 +102,12 @@ class Simulation:
             p = self.r.integrate(self.r.t + self.data['dt'])
             p = p.reshape(self.shape)
             if type(sampling) is not str and (n % sampling) == 0:
-                self.data.snapshot(self.r.t, p=p, a=0)
+                self.data.snapshot(self.r.t, p=p, a=self.a)
             n = n + 1
         progress.end()
 
         if sampling == 'last':
-            self.data.snapshot(self.r.t, p=p, a=0)
+            self.data.snapshot(self.r.t, p=p, a=self.a)
 
         if not self.quiet:
             print('* Done after {:.2f}s'.format(time.time() - start_time))
@@ -114,14 +119,24 @@ class Simulation:
     def export_field_image(self, field, path, log=False, title=None,
             colorbar=True, log_min_value=1e-20):
 
+        from numpy import isscalar
         from .graphism import save_image, value_unit, si_value
+
+        if field == 'E':
+            from scipy.linalg import norm
+            data = norm(self.E, axis=0)
+        else:
+            data = self.data[field]
+
+        if isscalar(data):
+            return print(f'\'{field}\' is not a field but a scalar = {data}')
         xlim,ylim = (self.lim[0], (self.lim[1][1], self.lim[1][0]))
-        save_image(path=path, data=self.data[field], title=title,
+        save_image(path=path, data=data, title=title,
                 xlim=xlim, ylim=ylim, colorbar=colorbar)
 
 
     def export_images(self, output_dir, prefix='', log=False, title='$t = {tf}$',
-            colorbar=True, background=None, clim=None, log_min_value=1e-20):
+            colorbar=False, background=None, clim=None, log_min_value=1e-20):
 
         from .graphism import save_image, value_unit, si_value
         from numpy import min, max, abs, log10, sum, product
@@ -246,12 +261,15 @@ class Simulation:
                 'X': 'xyz',
                 'Y': 'xyz',
                 'Z': 'xyz',
-                'D': 'constant',
+                'D': 'edge',
                 'g': 'edge',
                 'V': 'edge',
                 'p': 'constant',
-                'mu': 'constant'
-                    }
+                'mu': 'edge',
+                'a_e': 'constant',
+                'a_h': 'constant',
+                'a_region': 'constant'
+                }
 
         if padding is None:
             return fields

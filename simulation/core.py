@@ -12,10 +12,15 @@ def solvr(t, p, sim):
     # variables acquisition
     D = sim.data['D']
     mu = sim.data['mu']
+    a_region = sim.data['a_region'].astype(bool)
     XYZ = sim.XYZ
     dim = len(sim.shape)
     p = p.reshape(sim.shape)
     t2 = time.clock()
+
+    # avalanche count
+    sim.a = sum(p * a_region)
+    p[a_region] = 0
 
     # math
     diff = divergence(atleast_2d(gradient(p, *sim.d))*D, sim.d)
