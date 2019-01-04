@@ -2,8 +2,6 @@
 
 from .progressBar import ProgressBar
 
-from scipy.integrate import ode
-
 __all__ = ['utils']
 
 class Simulation:
@@ -15,7 +13,7 @@ class Simulation:
         self.mode = mode
 
 
-    def init(self, dt, padding=None, **kwargs):
+    def init(self, padding=None, **kwargs):
 
         from .utils import get_dim, get_XYZ, get_lim, get_dx
         from numpy import isscalar, atleast_1d, gradient
@@ -24,12 +22,11 @@ class Simulation:
 
         # static
         static = {
-                'dt': dt,
                 'X': kwargs['X'],
                 'Y': kwargs.get('Y'),
                 'Z': kwargs.get('Z'),
                 'D': kwargs.get('D', 0),
-                'mu': kwargs.get('mu', 1),
+                'mu': kwargs.get('mu', 0),
                 'V': kwargs.get('V', 0),
                 'a_e': kwargs.get('a_e', 0),
                 'a_h': kwargs.get('a_h', 0),
@@ -41,6 +38,8 @@ class Simulation:
 
         ## static scalars 
         static_scalars = {k:v for k,v in static.items() if v is not None and isscalar(v)}
+        if len(static_scalars) == 0:
+            static_scalars = {'empty': 0}
         self.data.init_static_scalars(static_scalars)
 
         ## static fields
@@ -73,50 +72,82 @@ class Simulation:
             if self.dim == 1:
                 self.E = [self.E]
 
+        # avalanche probability 
+#        self.P_e, self.P_h = self._compute_avalanche_probability()
+
 
     def reset(self):
         for i in f.root:
             f.remove_node(i)
 
 
-    def run(self, t, sampling=1):
+    def run(self, t_goal, t_s=None):
+
+        from .core import smoluchowski 
+        from scipy.integrate import solve_ivp
+        from numpy import inf 
         import time
+
         start_time = time.time()
+        self.t_s = t_s
+
         if not self.quiet:
             print('* Setting up simulation')
-        self._setup_simulation(self.data[0,'p'])
+        
+        # setting up function
+        D = self.data['D']
+        mu = self.data['mu']
+        E = self.E
+        a_region = self.data['a_region'].astype(bool)
+        XYZ = self.XYZ
+        d = self.d
+        shape = self.shape
         progress = ProgressBar()
+        self._t = t_s
+        self._p = None
+        self._a = None
+        if type(t_s) is str and t_s == 'last':
+            max_step = inf
+        else:
+            max_step = t_s
 
-        # computation times reset
-        self.tcomp_var   = 0
-        self.tcomp_diff  = 0
-        self.tcomp_drift = 0
+        def fun(t, p):
+            # core
+            p = p.reshape(shape)
+            a,dp = smoluchowski(t, p, D=D, mu=mu, E=E, a_region=a_region,
+                    d=d)
 
-        if not self.quiet:
-            print('* Starting simulation (goal: {:.2e}s)'.format(t))
-
-        n = 1
-        while self.r.successful() and self.r.t < t:
+            # progress bar
             if not self.quiet:
-                progress.set_ratio(self.r.t/t)
-            p = self.r.integrate(self.r.t + self.data['dt'])
-            p = p.reshape(self.shape)
-            if type(sampling) is not str and (n % sampling) == 0:
-                self.data.snapshot(self.r.t, p=p, a=self.a)
-            n = n + 1
-        progress.end()
+                progress.set_ratio(t / t_goal)
 
-        if sampling == 'last':
-            self.data.snapshot(self.r.t, p=p, a=self.a)
+            # recording
+            if t_s is not None and type(t_s) is not str and t > self._t + t_s:
+                self.data.snapshot(t, p=p, a=a)
+                self.t_tmp = t
+            elif t_s == 'last': 
+                self._t = t
+                self._p = p
+                self._a = a
+
+            return dp.reshape(-1)
+
+        # starting simulation
+        if not self.quiet:
+            print('* Starting simulation (goal: {:.2e}s)'.format(t_goal))
+        solve_ivp(fun, t_span=[0, t_goal], y0=self.data[0, 'p'].reshape(-1),
+                max_step=max_step, vectorized=True)
+
+        # recording last
+        print('>>> ', self._t)
+        if t_s == 'last':
+            self.data.snapshot(self._t, p=self._p, a=self._a)
 
         if not self.quiet:
             print('* Done after {:.2f}s'.format(time.time() - start_time))
-            print('** Variable computation time : {:.2f}s'.format(self.tcomp_var))
-            print('** Diffusion computation time : {:.2f}s'.format(self.tcomp_diff))
-            print('** Drift computation time : {:.2f}s'.format(self.tcomp_drift))
 
     
-    def export_field_image(self, field, path, log=False, title=None,
+    def export_static_field_img(self, field, path, log=False, title=None,
             colorbar=True, log_min_value=1e-20):
 
         from numpy import isscalar
@@ -135,7 +166,7 @@ class Simulation:
                 xlim=xlim, ylim=ylim, colorbar=colorbar)
 
 
-    def export_images(self, output_dir, prefix='', log=False, title='$t = {tf}$',
+    def export_dynamic_field_img(self, output_dir, prefix='', log=False, title='$t = {tf}$',
             colorbar=False, background=None, clim=None, log_min_value=1e-20):
 
         from .graphism import save_image, value_unit, si_value
@@ -156,7 +187,7 @@ class Simulation:
             clim = log10(clim)
         
         # time unit 
-        tmin = self.data['dt']
+        tmin = self.t_s
         if N > 1:
             t_order,t_prefix = value_unit(tmin)
 
@@ -214,13 +245,6 @@ class Simulation:
         return [self.data[x] for x in 'XYZ'[:self.dim]]
 
 
-    def _setup_simulation(self, p0):
-        from .core import solvr
-        self.r = ode(solvr).set_integrator('dop853')
-        self.r.set_initial_value(y=p0.reshape(-1), t=0)
-        self.r.set_f_params(self)
-
-
     def _get_clim(self, log=False):
         from numpy import min, max, abs
         N = len(self.data)
@@ -276,3 +300,41 @@ class Simulation:
 
         return {k:pad(fields[k], width=padding, mode=modes[k]) for k in fields}
 
+    
+    def _compute_avalanche_probability(self):
+        from .core import avalanche_probability
+        from .utils import get_dim
+        from scipy.integrate import solve_ivp
+        from scipy.interpolate import interp1d
+        from numpy import zeros, ones, array
+
+        dim = self.dim 
+        XYZ = self.XYZ
+        a_e = self.data['a_e']
+        a_h = self.data['a_h']
+        if dim == 1:
+            x = XYZ[0]
+            axis = 0
+            shape = 1
+            shape = a_e.shape[1:]
+        elif dim == 2:
+            x = XYZ[0][0]
+            axis = 1
+            shape = a_e.shape[1:]
+        elif dim == 3:
+            x = XYZ[2][0][0]
+            axis = 2
+            shape = a_e.shape[0:2]
+
+
+        a_e = interp1d(x, a_e, axis=axis)
+        a_h = interp1d(x, a_h, axis=axis)
+
+        fun = lambda x,P: avalanche_probability(x, P, a_e, a_h) 
+        x_span = (min(x), max(x))
+        P0 = array([ones(shape, dtype=complex), zeros(shape)])
+
+
+        P = solve_ivp(fun=fun, t_span=x_span, y0=P0, t_eval=x)
+        print(p.shape)
+        return P

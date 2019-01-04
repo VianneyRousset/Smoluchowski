@@ -46,7 +46,7 @@ def load_data(prefix, res, crop=None):
 def load_field(path, res, crop=None):
     data = np.loadtxt(path, unpack=True)
     xyz,f = data[:-1],data[-1]
-    return ut.rasterized_region(tuple(xyz), f, res, crop)
+    return ut.rasterize_region(tuple(xyz), f, res, crop)
 
 
 if __name__ == '__main__':
@@ -70,16 +70,15 @@ if __name__ == '__main__':
 
     # simulation
     print('* Inititializing simulator')
-    dt  = 1e-10
-    t   = 1e-7
-    p0  = -(data['R'] * (data['R'] < 0))
-#    p0  = ut.gaussian_dot((1.5, 1.8), 0.1, X, Y)
+    t   = 1e-6
+    t_s = 2e-8
+#    p0  = -(data['R'] * (data['R'] < 0))
+    p0  = ut.gaussian_dot((1.50, 1.40), 0.1, X, Y)
     sim = simulation.Simulation()
     sim.init(
             shape   = X.shape,
-            dt      = dt,
             p0      = p0,
-            V       = data['V'],
+            V       = -data['V'],
             D       = data['D_e'],
             mu      = data['mu_e'],
             a_e     = data['a_e'],
@@ -101,31 +100,31 @@ if __name__ == '__main__':
 
     # starting simulation
     print('* Starting simulation')
-    sim.run(t, sampling=1)
+    sim.run(t, t_s=t_s)
 
     # avalanche count
-    print('* Plotting avalanche count')
-    from matplotlib import pyplot as plt
-    t = [t for t in sim.data]
-    a = [sim.data[t, 'a'] for t in sim.data]
-    fig = plt.figure()
-    ax = fig.subplots()
-    ax.plot(t, a)
-    fig.savefig('output/a.pdf')
+#    print('* Plotting avalanche count')
+#    from matplotlib import pyplot as plt
+#    t = [t for t in sim.data]
+#    a = [sim.data[t, 'a'] for t in sim.data]
+#    fig = plt.figure()
+#    ax = fig.subplots()
+#    ax.plot(t, a)
+#    fig.savefig('output/a.pdf')
 
 
     # export images
     print('* Exporting images')
     E = np.linalg.norm(sim.E, axis=0)
-    sim.export_field_image('D', 'output/D.png', log=False, title=r'Diffusion coef. $D$')
-    sim.export_field_image('mu', 'output/mu.png', log=False, title=r'Mobility. $\mu$')
-    sim.export_field_image('V', 'output/V.png', log=False, title=r'Electrostatic potential $V$')
-    sim.export_field_image('a_e', 'output/a_e.png', log=False, title=r'Ionization coefficient $\alpha_e$')
-    sim.export_field_image('a_h', 'output/a_h.png', log=False, title=r'Ionization coefficient $\alpha_h$')
-    sim.export_field_image('E', 'output/E.png', log=False, title=r'Electric field $E$')
-    sim.export_field_image('a_region', 'output/a_region.png', log=False, title=r'Avalanche region')
+    sim.export_static_field_img('D', 'output/D.png', log=False, title=r'Diffusion coef. $D$')
+    sim.export_static_field_img('mu', 'output/mu.png', log=False, title=r'Mobility. $\mu$')
+    sim.export_static_field_img('V', 'output/V.png', log=False, title=r'Electrostatic potential $V$')
+    sim.export_static_field_img('a_e', 'output/a_e.png', log=False, title=r'Ionization coefficient $\alpha_e$')
+    sim.export_static_field_img('a_h', 'output/a_h.png', log=False, title=r'Ionization coefficient $\alpha_h$')
+    sim.export_static_field_img('E', 'output/E.png', log=False, title=r'Electric field $E$')
+    sim.export_static_field_img('a_region', 'output/a_region.png', log=False, title=r'Avalanche region')
 
-    sim.export_images('output', prefix='img_', log=False, colorbar=True, title='$t = {tf}$')
+    sim.export_dynamic_field_img('output', prefix='img_', log=False, colorbar=True, title='$t = {tf}$')
 
     print('* DONE *')
 

@@ -93,7 +93,7 @@ def load_grd(path, region, header_limit=100):
     return vertices
 
 
-def rasterized_region(points, values, resolution, crop=None, method='linear'):
+def rasterize_region(points, values, resolution, crop=None, method='linear'):
     from scipy.interpolate import griddata
     from numpy import meshgrid, linspace, diff
     dim = len(points)

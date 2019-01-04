@@ -3,34 +3,24 @@
 from .utils import divergence
 from scipy.ndimage.filters import laplace
 from numpy import sum, power, gradient, atleast_2d
-import time
 
-def solvr(t, p, sim):
-
-    t1 = time.clock()
-
-    # variables acquisition
-    D = sim.data['D']
-    mu = sim.data['mu']
-    a_region = sim.data['a_region'].astype(bool)
-    XYZ = sim.XYZ
-    dim = len(sim.shape)
-    p = p.reshape(sim.shape)
-    t2 = time.clock()
+def smoluchowski(t, p, D, mu, E, a_region, d):
 
     # avalanche count
-    sim.a = sum(p * a_region)
-    p[a_region] = 0
+    a = sum(p * a_region)
+#    p[a_region] = 0
 
     # math
-    diff = divergence(atleast_2d(gradient(p, *sim.d))*D, sim.d)
-    t3 = time.clock()
-    drift = divergence([mu*p*E for E in sim.E], sim.d)
-    t4 = time.clock()
+    diff = divergence(atleast_2d(gradient(p, *d))*D, d)
+    drift = divergence([mu*p*e for e in E], d)
+    dp = diff + drift
 
-    # saving computation time 
-    sim.tcomp_var   += t2 - t1
-    sim.tcomp_diff  += t3 - t2
-    sim.tcomp_drift += t4 - t3
+    return a,dp
 
-    return (diff - drift).reshape(-1)
+
+def avalanche_probability(x, P, a_e, a_p):
+    P_e,P_h = P
+    return np.array([
+         (1 - P_e) * a_e(x) * (P_e + P_h + P_e*P_h),
+        -(1 - P_h) * a_h(x) * (P_e + P_h + P_e*P_h),
+        ])

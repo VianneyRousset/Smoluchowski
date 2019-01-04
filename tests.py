@@ -18,8 +18,6 @@ def test_gaussian(dim, mu, D, Ex):
 
 	# time
 	t   = 10
-	dt  = 1
-
 	V   = Ex*XYZ[0]
 
 	# error
@@ -27,16 +25,15 @@ def test_gaussian(dim, mu, D, Ex):
 
 	# running sim and check
 	sim = sim_gaussian(
-			shape    = shape,
-			pos      = pos,
-			radius   = radius,
-			dt       = dt,
-			t        = t,
-			D        = D,
-			mu       = mu,
-			V        = V,
-			size     = size,
-			sampling = 'last')
+			shape   = shape,
+			pos     = pos,
+			radius  = radius,
+			t       = t,
+			D       = D,
+			mu      = mu,
+			V       = V,
+			size    = size,
+			t_s     = 'last')
 
 	t = nearest_t(sim, t)
 	result = sim.data[t, 'p']
@@ -61,14 +58,14 @@ def test_gaussian(dim, mu, D, Ex):
 	return err
 
 
-def sim_gaussian(shape, pos, radius, dt, t, D, mu, V, size=[-10, 10], sampling=1):
+def sim_gaussian(shape, pos, radius, t, D, mu, V, size=[-10, 10], t_s=None):
 	dim = len(shape)
 	XYZ = meshgrid_from_lim(shape, *[size]*dim)
 	p0 = gaussian_dot(pos, radius, *XYZ)
 	sim = Simulation()
 	XYZ = {k:v for k,v in zip(['X', 'Y', 'Z'], XYZ)}
-	sim.init(shape=shape, dt=dt, p0=p0, D=D, V=V, mu=mu, **XYZ)
-	sim.run(t, sampling=sampling)
+	sim.init(shape=shape, p0=p0, D=D, V=V, mu=mu, **XYZ)
+	sim.run(t, t_s=t_s)
 	return sim
 
 
