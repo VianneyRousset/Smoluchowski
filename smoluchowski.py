@@ -71,9 +71,10 @@ if __name__ == '__main__':
     # simulation
     print('* Inititializing simulator')
     t   = 1e-6
-    t_s = 2e-8
+    t_s = 1e-8
 #    p0  = -(data['R'] * (data['R'] < 0))
-    p0  = ut.gaussian_dot((1.50, 1.40), 0.1, X, Y)
+#    p0  = ut.gaussian_dot((0.10, 1.90), 0.1, X, Y)
+    p0 = np.ones(X.shape)
     sim = simulation.Simulation()
     sim.init(
             shape   = X.shape,
@@ -85,8 +86,8 @@ if __name__ == '__main__':
             a_h     = data['a_h'],
             X       = X,
             Y       = Y,
-            padding = [(0, 1), (1, 1)],
-            a_region = data['a_e'] >= 1,
+            padding = [(2, 2), (2, 2)],
+            a_region = (data['a_e'] >= 1),
             )
 
     print('** V (min)\t= {: .2e} V'.format(np.min(data['V'])))
@@ -103,14 +104,14 @@ if __name__ == '__main__':
     sim.run(t, t_s=t_s)
 
     # avalanche count
-#    print('* Plotting avalanche count')
-#    from matplotlib import pyplot as plt
-#    t = [t for t in sim.data]
-#    a = [sim.data[t, 'a'] for t in sim.data]
-#    fig = plt.figure()
-#    ax = fig.subplots()
-#    ax.plot(t, a)
-#    fig.savefig('output/a.pdf')
+    print('* Plotting avalanche count')
+    from matplotlib import pyplot as plt
+    t = [t for t in sim.data]
+    a = [sim.data[t, 'a'] for t in sim.data]
+    fig = plt.figure()
+    ax = fig.subplots()
+    ax.plot(t, a)
+    fig.savefig('output/a.pdf')
 
 
     # export images
@@ -124,7 +125,7 @@ if __name__ == '__main__':
     sim.export_static_field_img('E', 'output/E.png', log=False, title=r'Electric field $E$')
     sim.export_static_field_img('a_region', 'output/a_region.png', log=False, title=r'Avalanche region')
 
-    sim.export_dynamic_field_img('output', prefix='img_', log=False, colorbar=True, title='$t = {tf}$')
+    sim.export_dynamic_field_img('output', prefix='img_', log=False, colorbar=True, clim=[-1, 1], title=r'$t = {tf} \quad I = {sum:.2f}$ \\ min = {min:.2f} \quad max = {max:.2f}', background=None)
 
     print('* DONE *')
 

@@ -124,7 +124,7 @@ class Simulation:
             # recording
             if t_s is not None and type(t_s) is not str and t > self._t + t_s:
                 self.data.snapshot(t, p=p, a=a)
-                self.t_tmp = t
+                self._t = t
             elif t_s == 'last': 
                 self._t = t
                 self._p = p
@@ -139,12 +139,12 @@ class Simulation:
                 max_step=max_step, vectorized=True)
 
         # recording last
-        print('>>> ', self._t)
         if t_s == 'last':
             self.data.snapshot(self._t, p=self._p, a=self._a)
 
         if not self.quiet:
-            print('* Done after {:.2f}s'.format(time.time() - start_time))
+            print('* Done after {:.2f}s with {} snapshots.'.format(
+                time.time() - start_time, len(self.data)))
 
     
     def export_static_field_img(self, field, path, log=False, title=None,
@@ -167,7 +167,7 @@ class Simulation:
 
 
     def export_dynamic_field_img(self, output_dir, prefix='', log=False, title='$t = {tf}$',
-            colorbar=False, background=None, clim=None, log_min_value=1e-20):
+            colorbar=False, background=None, clim='auto', log_min_value=1e-20):
 
         from .graphism import save_image, value_unit, si_value
         from numpy import min, max, abs, log10, sum, product
@@ -176,13 +176,13 @@ class Simulation:
         N = len(self.data)
 
         # field extrema
-        if not clim:
+        if type(clim) is str and clim == 'auto':
             if not self.quiet:
                 print('* Looking for field extrema')
             clim = self._get_clim(log=log)
             if not self.quiet:
                 print('* Done')
-        if log:
+        if log and clim:
             clim = [max([l,log_min_value]) for l in clim]
             clim = log10(clim)
         
@@ -208,9 +208,14 @@ class Simulation:
             title_values = {'t': '{:e}'.format(t), 'N': N, 'i': i, 'name': name, 'path': path,
                 'tf': si_value(round(t/t_order), t_prefix + r'\second')}
 
-            # compute integration if needed
+            # compute integration, min and max if needed
             if 'sum' in {v[1] for v in Formatter().parse(title)}:
                 title_values['sum'] = sum(data) * product(self.d)
+            if 'min' in {v[1] for v in Formatter().parse(title)}:
+                title_values['min'] = min(data) * product(self.d)
+            if 'max' in {v[1] for v in Formatter().parse(title)}:
+                title_values['max'] = max(data) * product(self.d)
+
 
             # log
             if log:

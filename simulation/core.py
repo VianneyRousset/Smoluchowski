@@ -8,7 +8,7 @@ def smoluchowski(t, p, D, mu, E, a_region, d):
 
     # avalanche count
     a = sum(p * a_region)
-#    p[a_region] = 0
+    p[a_region] = 0
 
     # math
     diff = divergence(atleast_2d(gradient(p, *d))*D, d)
