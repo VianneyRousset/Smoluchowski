@@ -5,8 +5,104 @@ import simulation.utils as ut
 
 import numpy as np
 import scipy.constants as const
-from sys import argv, exit
-from os import remove
+
+res_default = 0.1
+out_default = './'
+
+
+def read_argv():
+    from sys import argv, exit
+    from optparse import OptionParser
+
+    parser = OptionParser(usage='%prog [-h] [-t T] [-r RES] [-R ROI] [-p PAD] '
+            '[-s] [-d TS] [-a] [-o OUT] [-w WL] -a MODE INPUT')
+
+    parser.description = 'Compute field drift-diffusion time evolution using ' \
+        'input prefix INPUT'
+
+    parser.add_option('-t', '--time', dest='t_goal', metavar='TIME',
+            default=None, help='set simulation goal time, default is computed '
+            'with the mean of particle lifetime')
+
+    parser.add_option('-r', '--resolution', dest='res', metavar='RES',
+            default=res_default, help=f'set simulation resolution in distance '
+            'unit, default is {res_default}')
+
+    parser.add_option('-R', '--roi', dest='ROI', metavar='ROI',
+            default=None, help=f'set region of interest to crop in the '
+            'following format: x-,x+,y-,y+,z-,z+')
+
+    parser.add_option('-p', '--padding', dest='padding', metavar='PAD',
+            default=None, help=f'set the padding to be added in distance unit '
+            'in the following format: x-,x+,y-,y+,z-,z+')
+
+    parser.add_option('-s', '--plot-static', action='store_true',
+            dest='plot-static', default=False, help='plot static fields '
+            '(2D simulation only)')
+
+    parser.add_option('-d', '--plot-dynamic', dest='t_sampling', metavar='TS',
+            default=False, help='plot dynamic evolution with sampling perdiod '
+            'TS (2D simulation only)')
+
+    parser.add_option('-o', '--output', dest='output', metavar='OUTPUT',
+            default=out_default, help='set plot output prefix')
+
+    parser.add_option('-m', '--mode', dest='mode', metavar='MODE',
+            default='', help='set simulation mode: DCR or PDP')
+
+    parser.add_option('-w', '--wavelength', dest='wavelength', metavar='WL',
+            default=None, help='operating wavelength [nm], needed for PDP mode')
+
+    parser.add_option('-a', '--avalanche-only', dest='avalanche',
+            action='store_true', default=False, help='only save dynamic '
+            'avalanche result data in txt, requieres -d')
+
+
+    options,input_prefix= parser.parse_args()
+
+    # missing input prefix
+    if len(input_prefix) != 1:
+        ut.printerr(parser.format_help())
+        exit(1)
+
+    # is plot dynamic fields true
+    options = options.__dict__
+    options['plot-dynamic'] = options['t_sampling'] is not False
+
+    # invalid simulation mode
+    options['mode'] = options['mode'].upper().strip()
+    if options['mode'] not in ['DCR', 'PDP']:
+        ut.printerr('Invalid simulation mode: ', options['mode'])
+        ut.printerr(parser.format_help())
+        exit(1)
+
+    # missing wavelength in PDP mode
+    if options['mode'] == 'PDP' and options['wavelength'] is None:
+        ut.printerr('Missing wavelength (requiered for PDP mode)')
+        ut.printerr(parser.format_help())
+        exit(1)
+
+    # missing dynamic with avalanche
+    if options['avalanche'] and not options['plot-dynamic']:
+        ut.printerr('-a option requieres -d')
+        ut.printerr(parser.format_help())
+        exit(1)
+
+    # convertions
+    if options['t_goal'] is not None:
+        options['t_goal']   = float(options['t_goal'])
+    options['res']      = float(options['res'])
+    if options['ROI'] is not None:
+        options['ROI']      = [float(x) for x in options['ROI'].split(',')]
+        options['ROI']      = np.array(options['ROI']).reshape(-1,2)
+    if options['padding'] is not None:
+        options['padding']  = [float(x) for x in options['padding'].split(',')]
+        options['padding']  = np.array(options['padding']).reshape(-1,2)
+    if options['plot-dynamic']:
+        options['t_sampling']   = float(options['t_sampling'])
+    options['wavelength']   = float(options['wavelength'])
+
+    return options,input_prefix[0]
 
 
 def load_data(prefix, res, crop=None):
@@ -20,6 +116,12 @@ def load_data(prefix, res, crop=None):
             'a_e':      'eAlphaAvalanche',
             'a_h':      'hAlphaAvalanche',
             }
+
+    def load_field(path, res, crop=None):
+        data = np.loadtxt(path, unpack=True)
+        xyz,f = data[:-1],data[-1]
+        return ut.rasterize_region(tuple(xyz), f, res, crop)
+
     data = {f:load_field(f'{prefix}{fname}.txt', res, crop)
             for f,fname in fields.items()}
     fields = {k:v[2] for k,v in data.items()}
@@ -43,89 +145,198 @@ def load_data(prefix, res, crop=None):
     return fields,lim,XYZ
 
 
-def load_field(path, res, crop=None):
-    data = np.loadtxt(path, unpack=True)
-    xyz,f = data[:-1],data[-1]
-    return ut.rasterize_region(tuple(xyz), f, res, crop)
+def prepare_simulation(options, data, XYZ, particle):
 
+    if particle not in ['electron', 'hole']:
+        raise ValueError(f'Invalid particle \'{particle}\'')
 
-if __name__ == '__main__':
+    if options['mode'] == 'PDP':
+        p0 = PDP_profile(options, data, XYZ)
+    elif options['mode'] == 'DCR':
+        p0 = DCR_profile(options, data, XYZ, tau)
 
-    ROI = [(0,6), (0,2)]
-    
-    # read arguments
-    if len(argv) < 2:
-        ut.printerr(f'Usage: {argv[0]} prefix [res] \n'
-                'For example, \'./smoluchowski.py n20_ 0.05\' will '
-                'use files starting with \'n20_\' a 0.05um resolution')
-        exit(1)
-    prefix = argv[1]
-    res = 0.05
-    if len(argv) > 2:
-        res = float(argv[2])
+    sim = simulation.Simulation(avalanche_only=options['avalanche'])
 
-    # load data
-    print('* Loading fields')
-    data,lim,(X,Y)= load_data(prefix, res, crop=ROI)
-
-    # simulation
-    print('* Inititializing simulator')
-    t   = 1e-6
-    t_s = 1e-8
-#    p0  = -(data['R'] * (data['R'] < 0))
-#    p0  = ut.gaussian_dot((0.10, 1.90), 0.1, X, Y)
-    p0 = np.ones(X.shape)
-    sim = simulation.Simulation()
+    from scipy.ndimage import gaussian_filter
     sim.init(
-            shape   = X.shape,
             p0      = p0,
-            V       = -data['V'],
-            D       = data['D_e'],
-            mu      = data['mu_e'],
+            shape   = XYZ[0].shape,
+            V       = data['V'],
+            D       = data['D_e'] if particle == 'electron' else data['D_h'],
+            mu      = data['mu_e'] if particle == 'electron' else data['mu_h'],
             a_e     = data['a_e'],
             a_h     = data['a_h'],
-            X       = X,
-            Y       = Y,
-            padding = [(2, 2), (2, 2)],
-            a_region = (data['a_e'] >= 1),
+            padding = options['padding'],
+            a_region =  gaussian_filter((data['a_e'] >= 6).astype(float), sigma=0.1/options['res']),
+            **{k:v for k,v in zip('XYZ', XYZ)},
             )
 
-    print('** V (min)\t= {: .2e} V'.format(np.min(data['V'])))
-    print('** V (max)\t= {: .2e} V'.format(np.max(data['V'])))
-    print('** E (max)\t= {: .2e} V um-1'.format(np.max(sim.E)))
-    print('** E (min)\t= {: .2e} V um-1'.format(np.min(sim.E)))
-    print('** mu (mean)\t= {: .2e} um2 V-1 s-1'.format(np.mean(data['mu_e'])))
-    print('** D (mean)\t= {: .2e} um2 s-1'.format(np.mean(data['D_e'])))
-    print('** tau (mean)\t= {: .2e} s'.format(data['tau_e']))
-    print('** Size [px]\t=  {}x{} px'.format(*sim.XYZ[0].shape))
+    return sim
 
-    # starting simulation
-    print('* Starting simulation')
-    sim.run(t, t_s=t_s)
+
+def get_timing(options, data, particle):
+
+    if particle not in ['electron', 'hole']:
+        raise ValueError(f'Invalid particle \'{particle}\'')
+
+    # t_goal
+    t_goal = options['t_goal']
+    if t_goal is None:
+        tau = 'tau_e' if particle == 'electron' else 'tau_h'
+        tau = np.mean(data[tau])
+        t_goal = tau 
+
+    # t_sampling
+    t_sampling = options['t_sampling'] if options['plot-dynamic'] else np.inf
+
+    return t_goal, t_sampling
+
+
+def print_simulation_info(sim, data, t_goal, t_sampling, particle):
+
+    tau = 'tau_e' if particle == 'electron' else 'tau_h'
+
+    info = {
+            'Vmin':         np.min(sim.data['V']),
+            'Vmax':         np.max(sim.data['V']),
+            'Emin':         np.min(sim.E),
+            'Emax':         np.max(sim.E),
+            'mu':           np.mean(sim.data['mu']),
+            'D':            np.mean(sim.data['D']),
+            'tau':          np.mean(data[tau]),
+            't_goal':       t_goal,
+            't_sampling':   t_sampling,
+            }
+
+    txt =   '** V (min)\t= {Vmin: .2e} V\n' \
+            '** V (max)\t= {Vmax: .2e} V\n' \
+            '** E (min)\t= {Emin: .2e} V um-1\n' \
+            '** E (max)\t= {Emax: .2e} V um-1\n' \
+            '** mu (mean)\t= {mu: .2e} um2 V-1 s-1\n' \
+            '** D (mean)\t= {D: .2e} um2 s-1\n' \
+            '** tau (mean)\t= {tau: .2e} s\n' \
+            '** t_goal\t= {t_goal: .2e} s\n' \
+            '** t_sampling\t= {t_sampling: .2e} s'
+
+    print(txt.format(**info))
+    size = 'x'.join([str(w) for w in sim.data['X'].shape])
+    print('** Size [px]\t=  {} px\n'.format(size))
+
+
+def DCR_profile(options, data, XYZ):
+    shape = XYZ[0].shape
+    return np.zeros(shape)
+
+
+def PDP_profile(options, data, XYZ):
+    dim = len(XYZ[0].shape)
+    d = ut.get_dx(*XYZ)
+    a = ut.absorption_coefficient_silicon(options['wavelength'])
+    x = XYZ[dim-1]
+    dx = d[dim-1]
+    p = a*np.exp(-a*x)*dx
+    return p / (np.sum(p) * np.product(d))
+
+
+def plot_static(sim, out):
+
+    print('* Exporting static fields')
+
+    fields = [
+            ('D', 'Diffusion coef.', 'D', r'\square\micro\meter'),
+            ('mu', 'Mobility', r'\mu', r'\cubic\micro\meter\per\volt'),
+            ('V', 'Potential', r'V', r'\volt'),
+            ('a_e', r'Electron avalanche coef.', r'\alpha_e', r'\per\micro\meter'),
+            ('a_h', r'Hole avalanche coef.', r'\alpha_h', r'\per\micro\meter'),
+            ('E', r'Electric field', 'E', r'\volt\per\micro\meter'),
+            ('a_region', 'Avalanche region', None, None),
+            ('X', 'X', None, None),
+            ('Y', 'Y', None, None),
+            ]
+
+    N = len(fields)
+    for i,(f,t,n,u) in enumerate(fields):
+        if n and u:
+            t += ' ' + ut.siLabel(f'${n}$', u)
+        elif n:
+            t += '$' + n + '$'
+
+        print('\b'*8, end='', flush=True)
+        print(f'{i+1:d}/{N:d}', end='', flush=True)
+        sim.export_static_field_img(f, f'{out}{f}.png', log=False, title=t)
+    print('\b'*8, end='', flush=True)
+
+
+def plot_dynamic(sim, out, avalanche=False):
+
+    # avalanche only
+    filepath = f'{out}avalanche.txt'
+    print(f'* Saving avalanche count to \'{filepath}\'')
+    X = [[t,sim.data[t, 'a']] for t in sim.data]
+    with open(filepath, 'w') as f:
+        f.write('# time[s]\tavalancheCount[s-1]\n')
+        np.savetxt(f, X)
+
+    if avalanche:
+        return
 
     # avalanche count
     print('* Plotting avalanche count')
     from matplotlib import pyplot as plt
-    t = [t for t in sim.data]
-    a = [sim.data[t, 'a'] for t in sim.data]
+    ta = np.array([[t,sim.data[t, 'a']] for t in sim.data])
     fig = plt.figure()
     ax = fig.subplots()
-    ax.plot(t, a)
-    fig.savefig('output/a.pdf')
+    ax.plot(*ta.T)
+    fig.savefig(f'{out}avalanche.pdf')
+
+    # dynamic fields
+    print('* Exporting dynamic fields')
+    l = np.max(sim.data['p0'])
+    title  = r'\textbf[{}]'.format(particle.capitalize()) + r'\\'
+    title += r' $t = {tf} \quad \mathrm[sum] = {sum} \\'
+    title += r'\mathrm[min] = {min} \\ \mathrm[max] = {max}$'
+    sim.export_dynamic_field_img(
+            prefix=out, 
+            log=False,
+            colorbar=True,
+            clim=[-l, l],
+            title=title, 
+            background=None)
 
 
-    # export images
-    print('* Exporting images')
-    E = np.linalg.norm(sim.E, axis=0)
-    sim.export_static_field_img('D', 'output/D.png', log=False, title=r'Diffusion coef. $D$')
-    sim.export_static_field_img('mu', 'output/mu.png', log=False, title=r'Mobility. $\mu$')
-    sim.export_static_field_img('V', 'output/V.png', log=False, title=r'Electrostatic potential $V$')
-    sim.export_static_field_img('a_e', 'output/a_e.png', log=False, title=r'Ionization coefficient $\alpha_e$')
-    sim.export_static_field_img('a_h', 'output/a_h.png', log=False, title=r'Ionization coefficient $\alpha_h$')
-    sim.export_static_field_img('E', 'output/E.png', log=False, title=r'Electric field $E$')
-    sim.export_static_field_img('a_region', 'output/a_region.png', log=False, title=r'Avalanche region')
+if __name__ == '__main__':
 
-    sim.export_dynamic_field_img('output', prefix='img_', log=False, colorbar=True, clim=[-1, 1], title=r'$t = {tf} \quad I = {sum:.2f}$ \\ min = {min:.2f} \quad max = {max:.2f}', background=None)
+    # read arguments
+    options,input_prefix = read_argv()
+    
+    # load data
+    print('* Loading fields')
+    data,lim,XYZ = load_data(input_prefix, options['res'], crop=options['ROI'])
+
+
+    for particle in ('electron', 'hole'):
+
+        print('{:^80s}'.format('## ' + particle.upper() + ' ##'))
+
+        # simulation
+        print('* Inititializing simulator')
+        sim = prepare_simulation(options=options, data=data, XYZ=XYZ,
+                particle=particle)
+        t_goal,t_sampling = get_timing(options=options, data=data,
+                particle=particle)
+        print_simulation_info(sim, data, t_goal, t_sampling, particle)
+
+        # starting simulation
+        print('* Starting simulation')
+        sim.run(t_goal, t_s=t_sampling)
+
+        # plots
+        if options['plot-static']:
+            plot_static(sim, out=options['output'] + f'{particle}_')
+        if options['plot-dynamic']:
+            plot_dynamic(sim, out=options['output'] + f'{particle}_',
+                    avalanche=options['avalanche'])
+
 
     print('* DONE *')
 

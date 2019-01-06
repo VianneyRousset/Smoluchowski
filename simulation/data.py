@@ -28,6 +28,8 @@ class SimData:
 
         # create tab
         self.static_scalars = set(scalars)
+        if not self.static_scalars:
+            return
         cols_desc = {c: Float64Col() for c in scalars}
         self.tab_static_scalars = self.f.create_table(self.f.root,
                 'static_scalars', cols_desc, 'Static scalars')
@@ -152,7 +154,7 @@ class SimData:
 
 
     def __iter__(self):
-        return self.tab_dynamic_fields.cols.t.__iter__()
+        return sorted(self.tab_dynamic_fields.cols.t.__iter__()).__iter__()
 
 
     def __len__(self):

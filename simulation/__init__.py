@@ -6,23 +6,25 @@ __all__ = ['utils']
 
 class Simulation:
 
-    def __init__(self, filename=None, quiet=False, mode='electron'):
+    def __init__(self, filename=None, quiet=False, avalanche_only=False,
+            particle='electron'):
         from .data import SimData
         self.quiet = quiet
         self.data = SimData(filename, mode='a')
-        self.mode = mode
+        self.avalanche_only = False
+        self.particle = particle
 
 
-    def init(self, padding=None, **kwargs):
+    def init(self, p0, X, **kwargs):
 
         from .utils import get_dim, get_XYZ, get_lim, get_dx
         from numpy import isscalar, atleast_1d, gradient
 
-        padding = self._convert_padding_width(kwargs, padding)
+        padding = self._convert_padding_width(kwargs, kwargs.get('padding'))
 
         # static
         static = {
-                'X': kwargs['X'],
+                'X': X,
                 'Y': kwargs.get('Y'),
                 'Z': kwargs.get('Z'),
                 'D': kwargs.get('D', 0),
@@ -31,6 +33,7 @@ class Simulation:
                 'a_e': kwargs.get('a_e', 0),
                 'a_h': kwargs.get('a_h', 0),
                 'a_region': kwargs.get('a_region', 0),
+                'p0': p0,
                 }
 
         dim = get_dim(static)
@@ -38,8 +41,6 @@ class Simulation:
 
         ## static scalars 
         static_scalars = {k:v for k,v in static.items() if v is not None and isscalar(v)}
-        if len(static_scalars) == 0:
-            static_scalars = {'empty': 0}
         self.data.init_static_scalars(static_scalars)
 
         ## static fields
@@ -49,10 +50,9 @@ class Simulation:
         self.data.init_static_fields(shape, static_fields)
 
         # dynamic
-        dynamic = {
-                'p': kwargs['p0'],
-                'a': 0
-                }
+        dynamic = {'a': 0}
+        if not self.avalanche_only:
+            dynamic['p'] = p0
 
         ## dynamic scalars and fields
         dynamic_scalars = {k:v for k,v in dynamic.items() if v is not None and isscalar(v)}
@@ -98,49 +98,59 @@ class Simulation:
         D = self.data['D']
         mu = self.data['mu']
         E = self.E
-        a_region = self.data['a_region'].astype(bool)
+        a_region = self.data['a_region']
         XYZ = self.XYZ
         d = self.d
         shape = self.shape
         progress = ProgressBar()
-        self._t = t_s
+        self._t = 0
+        self._t_last_sample = 0
         self._p = None
-        self._a = None
-        if type(t_s) is str and t_s == 'last':
+        self._a = 0 
+        if t_s is None or type(t_s) is str and t_s == 'last':
             max_step = inf
         else:
             max_step = t_s
 
         def fun(t, p):
+
             # core
             p = p.reshape(shape)
-            a,dp = smoluchowski(t, p, D=D, mu=mu, E=E, a_region=a_region,
-                    d=d)
+            a,dp = smoluchowski(t, p, D=D, mu=mu, E=E, a_region=a_region, d=d,
+                    charge_sign={'electron':-1, 'hole':1}[self.particle])
+            self._a += a
 
             # progress bar
             if not self.quiet:
                 progress.set_ratio(t / t_goal)
 
             # recording
-            if t_s is not None and type(t_s) is not str and t > self._t + t_s:
-                self.data.snapshot(t, p=p, a=a)
+            if t_s is not None and type(t_s) is not str and t > self._t_last_sample + t_s:
+                dt = t - self._t_last_sample
+                if self.avalanche_only:
+                    self.data.snapshot(t, a=self._a/dt)
+                else:
+                    self.data.snapshot(t, p=p, a=a/dt)
                 self._t = t
             elif t_s == 'last': 
                 self._t = t
                 self._p = p
-                self._a = a
 
             return dp.reshape(-1)
 
         # starting simulation
         if not self.quiet:
             print('* Starting simulation (goal: {:.2e}s)'.format(t_goal))
-        solve_ivp(fun, t_span=[0, t_goal], y0=self.data[0, 'p'].reshape(-1),
+        solve_ivp(fun, t_span=[0, t_goal], y0=self.data['p0'].reshape(-1),
                 max_step=max_step, vectorized=True)
+        progress.end()
 
         # recording last
         if t_s == 'last':
-            self.data.snapshot(self._t, p=self._p, a=self._a)
+            if self.avalanche_only:
+                self.data.snapshot(t, a=self._a)
+            else:
+                self.data.snapshot(t, p=self._p, a=self._a)
 
         if not self.quiet:
             print('* Done after {:.2f}s with {} snapshots.'.format(
@@ -166,7 +176,7 @@ class Simulation:
                 xlim=xlim, ylim=ylim, colorbar=colorbar)
 
 
-    def export_dynamic_field_img(self, output_dir, prefix='', log=False, title='$t = {tf}$',
+    def export_dynamic_field_img(self, prefix='', log=False, title='$t = {tf}$',
             colorbar=False, background=None, clim='auto', log_min_value=1e-20):
 
         from .graphism import save_image, value_unit, si_value
@@ -203,18 +213,23 @@ class Simulation:
             # usefull variables
             data = self.data[t, 'p']
             i = int(round(t/t_order))
-            name = '{}{:09d}'.format(prefix, i)
-            path = f'{output_dir}/{name}.png'
-            title_values = {'t': '{:e}'.format(t), 'N': N, 'i': i, 'name': name, 'path': path,
+            path = f'{prefix}{i:09d}.png'
+            title_values = {'t': '{:e}'.format(t), 'N': N, 'i': i, 'path': path,
                 'tf': si_value(round(t/t_order), t_prefix + r'\second')}
 
             # compute integration, min and max if needed
             if 'sum' in {v[1] for v in Formatter().parse(title)}:
                 title_values['sum'] = sum(data) * product(self.d)
+                title_values['sum'] = '{: .2e}'.format(title_values['sum'])
+                title_values['sum'] = si_value(title_values['sum'], 'part.')
             if 'min' in {v[1] for v in Formatter().parse(title)}:
-                title_values['min'] = min(data) * product(self.d)
+                title_values['min'] = min(data)
+                title_values['min'] = '{: .2e}'.format(title_values['min'])
+                title_values['min'] = si_value(title_values['min'], r'\per\micro\meter')
             if 'max' in {v[1] for v in Formatter().parse(title)}:
-                title_values['max'] = max(data) * product(self.d)
+                title_values['max'] = max(data)
+                title_values['max'] = '{: .2e}'.format(title_values['max'])
+                title_values['max'] = si_value(title_values['max'], r'\per\micro\meter')
 
 
             # log
@@ -226,6 +241,7 @@ class Simulation:
             ftitle = ''
             if title:
                 ftitle = title.format(**title_values)
+                ftitle = ftitle.replace('[', '{').replace(']', '}')
 
             # export image
             xlim,ylim = (self.lim[0], (self.lim[1][1], self.lim[1][0]))

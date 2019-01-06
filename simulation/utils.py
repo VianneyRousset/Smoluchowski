@@ -164,3 +164,20 @@ def pad(v, width, mode='constant'):
 
     return pad(v, width, mode)
 
+
+def absorption_coefficient_silicon(wavelength):
+    '''Return silicon absorption coefficent in [um-1] at wavelength in [nm]'''
+
+    from .refractive_index_silicon import ri
+    from numpy import array, pi
+    from scipy.interpolate import interp1d
+    l,_,k = array(ri).reshape(-1, 3).T
+    
+    return interp1d(1e3*l, 4*pi/l * k)(wavelength)
+    
+
+def siLabel(name, unit, delimiters=(r'\left[',r'\right]')):
+    if delimiters is None:
+        delimiters = ('','')
+    return str(name) + r'$\;' + delimiters[0] + r'\,\si{' + unit + r'}\,' + delimiters[1] + '$'
+

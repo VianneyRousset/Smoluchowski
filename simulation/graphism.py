@@ -58,7 +58,7 @@ def save_image(path, data, colorbar=True, background=None, clim=None,
             plt.imshow(colormap(data, clim=clim), extent=extent)
 
         if title:
-            plt.title(title, fontdict={'fontsize': 'x-small'})
+            plt.title(title, fontdict={'fontsize': 'xx-small'})
 
         if colorbar:
             plt.colorbar()

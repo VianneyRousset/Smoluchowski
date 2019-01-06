@@ -4,15 +4,15 @@ from .utils import divergence
 from scipy.ndimage.filters import laplace
 from numpy import sum, power, gradient, atleast_2d
 
-def smoluchowski(t, p, D, mu, E, a_region, d):
+def smoluchowski(t, p, D, mu, E, a_region, d, charge_sign):
 
     # avalanche count
     a = sum(p * a_region)
-    p[a_region] = 0
+    p[...] = p * (1 - a_region) # trick to directly access memory
 
     # math
     diff = divergence(atleast_2d(gradient(p, *d))*D, d)
-    drift = divergence([mu*p*e for e in E], d)
+    drift = charge_sign * divergence([mu*p*e for e in E], d)
     dp = diff + drift
 
     return a,dp
