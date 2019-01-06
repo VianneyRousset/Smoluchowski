@@ -9,13 +9,12 @@ import scipy.constants as const
 res_default = 0.1
 out_default = './'
 
-
 def read_argv():
     from sys import argv, exit
     from optparse import OptionParser
 
     parser = OptionParser(usage='%prog [-h] [-t T] [-r RES] [-R ROI] [-p PAD] '
-            '[-s] [-d TS] [-a] [-o OUT] [-w WL] -a MODE INPUT')
+            '[-s] [-d TS] [-a] [-o OUT] [-w WL] [-l LEN] -a MODE INPUT')
 
     parser.description = 'Compute field drift-diffusion time evolution using ' \
         'input prefix INPUT'
@@ -53,6 +52,9 @@ def read_argv():
     parser.add_option('-w', '--wavelength', dest='wavelength', metavar='WL',
             default=None, help='operating wavelength [nm], needed for PDP mode')
 
+    parser.add_option('-l', '--length', dest='active_length', metavar='LEN',
+            default=None, help='set active area length (radius in 3D) LEN, needed for PDP mode in 2D and 3D')
+
     parser.add_option('-a', '--avalanche-only', dest='avalanche',
             action='store_true', default=False, help='only save dynamic '
             'avalanche result data in txt, requieres -d')
@@ -82,6 +84,12 @@ def read_argv():
         ut.printerr(parser.format_help())
         exit(1)
 
+    # missing active area length in PDP mode
+    if options['mode'] == 'PDP' and options['active_length'] is None:
+        ut.printerr('Missing active area length (requiered for PDP mode)')
+        ut.printerr(parser.format_help())
+        exit(1)
+
     # missing dynamic with avalanche
     if options['avalanche'] and not options['plot-dynamic']:
         ut.printerr('-a option requieres -d')
@@ -101,6 +109,7 @@ def read_argv():
     if options['plot-dynamic']:
         options['t_sampling']   = float(options['t_sampling'])
     options['wavelength']   = float(options['wavelength'])
+    options['active_length']   = float(options['active_length'])
 
     return options,input_prefix[0]
 
@@ -168,7 +177,7 @@ def prepare_simulation(options, data, XYZ, particle):
             a_e     = data['a_e'],
             a_h     = data['a_h'],
             padding = options['padding'],
-            a_region =  gaussian_filter((data['a_e'] >= 6).astype(float), sigma=0.1/options['res']),
+            a_region =  data['a_e'] / np.max(data['a_e']),
             **{k:v for k,v in zip('XYZ', XYZ)},
             )
 
@@ -230,12 +239,13 @@ def DCR_profile(options, data, XYZ):
 
 
 def PDP_profile(options, data, XYZ):
-    dim = len(XYZ[0].shape)
     d = ut.get_dx(*XYZ)
     a = ut.absorption_coefficient_silicon(options['wavelength'])
-    x = XYZ[dim-1]
-    dx = d[dim-1]
+    x = XYZ[-1]
+    dx = d[-1]
     p = a*np.exp(-a*x)*dx
+    r = np.linalg.norm(XYZ[:-1], axis=0)
+    p[r > options['active_length']] = 0
     return p / (np.sum(p) * np.product(d))
 
 
@@ -273,7 +283,10 @@ def plot_dynamic(sim, out, avalanche=False):
     # avalanche only
     filepath = f'{out}avalanche.txt'
     print(f'* Saving avalanche count to \'{filepath}\'')
-    X = [[t,sim.data[t, 'a']] for t in sim.data]
+    N = len(sim.data)
+    X = np.array([[t*(not print('\b'*16, '\t', n+1, ' / ', N, end='', flush=True)),
+        sim.data[t, 'a']] for n,t in enumerate(sim.data)])
+    print()
     with open(filepath, 'w') as f:
         f.write('# time[s]\tavalancheCount[s-1]\n')
         np.savetxt(f, X)
@@ -284,10 +297,9 @@ def plot_dynamic(sim, out, avalanche=False):
     # avalanche count
     print('* Plotting avalanche count')
     from matplotlib import pyplot as plt
-    ta = np.array([[t,sim.data[t, 'a']] for t in sim.data])
     fig = plt.figure()
     ax = fig.subplots()
-    ax.plot(*ta.T)
+    ax.plot(*X.T)
     fig.savefig(f'{out}avalanche.pdf')
 
     # dynamic fields
