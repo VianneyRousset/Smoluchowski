@@ -155,7 +155,8 @@ def prepare_simulation(options, data, XYZ, particle):
     elif options['mode'] == 'DCR':
         p0 = DCR_profile(options, data, XYZ, tau)
 
-    sim = simulation.Simulation(avalanche_only=options['avalanche'])
+    sim = simulation.Simulation(avalanche_only=options['avalanche'],
+            particle=particle)
 
     from scipy.ndimage import gaussian_filter
     sim.init(
