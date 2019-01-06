@@ -85,7 +85,7 @@ class Simulation:
 
         from .core import smoluchowski 
         from scipy.integrate import solve_ivp
-        from numpy import inf 
+        from numpy import inf, append 
         import time
 
         start_time = time.time()
@@ -112,36 +112,42 @@ class Simulation:
         else:
             max_step = t_s
 
-        def fun(t, p):
+        t_a = 200e-12 # avalanche triggering time
+
+        def fun(t, data):
 
             # core
-            p = p.reshape(shape)
-            a,dp = smoluchowski(t, p, D=D, mu=mu, E=E, a_region=a_region, d=d,
-                    charge_sign={'electron':-1, 'hole':1}[self.particle])
-            self._a += a
+            a = data[0]
+            p = data[1:].reshape(shape)
+            charge_sign = {'electron':-1, 'hole':1}[self.particle]
+
+            # modify directly p numpy data for avalanche region
+            da,dp = smoluchowski(t=t, p=p, D=D, mu=mu, E=E, t_a=t_a,
+                    a_region=a_region, d=d, charge_sign=charge_sign)
+            ddata = append([da], dp.reshape(-1))
 
             # progress bar
             if not self.quiet:
                 progress.set_ratio(t / t_goal)
 
             # recording
+#            print(t, ' / ', self._t_last_sample, '+', t_s)
             if t_s is not None and type(t_s) is not str and t > self._t_last_sample + t_s:
-                dt = t - self._t_last_sample
                 if self.avalanche_only:
-                    self.data.snapshot(t, a=self._a/dt)
+                    self.data.snapshot(t, a=a)
                 else:
-                    self.data.snapshot(t, p=p, a=a/dt)
+                    self.data.snapshot(t, p=p, a=a)
                 self._t = t
             elif t_s == 'last': 
                 self._t = t
                 self._p = p
 
-            return dp.reshape(-1)
+            return ddata.reshape(-1)
 
         # starting simulation
         if not self.quiet:
             print('* Starting simulation (goal: {:.2e}s)'.format(t_goal))
-        solve_ivp(fun, t_span=[0, t_goal], y0=self.data['p0'].reshape(-1),
+        solve_ivp(fun, t_span=[0, t_goal], y0=append([0], self.data['p0'].reshape(-1)),
                 max_step=max_step, vectorized=True)
         progress.end()
 
