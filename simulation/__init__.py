@@ -112,7 +112,7 @@ class Simulation:
         else:
             max_step = t_s
 
-        t_a = 200e-12 # avalanche triggering time
+        t_a = 20e-12 # avalanche triggering time
 
         def fun(t, data):
 
