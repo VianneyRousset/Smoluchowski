@@ -344,10 +344,11 @@ if __name__ == '__main__':
         sim.run(t_goal, t_s=t_sampling)
 
         # plots
+        mode = options['mode']
         if options['plot-static']:
-            plot_static(sim, out=options['output'] + f'{particle}_')
+            plot_static(sim, out=options['output'] + f'{mode}_{particle}_')
         if options['plot-dynamic']:
-            plot_dynamic(sim, out=options['output'] + f'{particle}_',
+            plot_dynamic(sim, out=options['output'] + f'{mode}_{particle}_',
                     avalanche=options['avalanche'])
 
 

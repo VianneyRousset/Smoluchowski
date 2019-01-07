@@ -148,7 +148,7 @@ class Simulation:
         if not self.quiet:
             print('* Starting simulation (goal: {:.2e}s)'.format(t_goal))
         solve_ivp(fun, t_span=[0, t_goal], y0=append([0], self.data['p0'].reshape(-1)),
-                max_step=max_step, vectorized=True)
+                max_step=max_step, vectorized=True, rtol=1e-12)
         progress.end()
 
         # recording last
