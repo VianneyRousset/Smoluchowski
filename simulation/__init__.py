@@ -30,6 +30,7 @@ class Simulation:
                 'D': kwargs.get('D', 0),
                 'mu': kwargs.get('mu', 0),
                 'V': kwargs.get('V', 0),
+                'G': kwargs.get('G', 0),
                 'a_e': kwargs.get('a_e', 0),
                 'a_h': kwargs.get('a_h', 0),
                 'a_region': kwargs.get('a_region', 0),
@@ -98,6 +99,7 @@ class Simulation:
         D = self.data['D']
         mu = self.data['mu']
         E = self.E
+        G = self.data['G']
         a_region = self.data['a_region']
         XYZ = self.XYZ
         d = self.d
@@ -122,7 +124,7 @@ class Simulation:
             charge_sign = {'electron':-1, 'hole':1}[self.particle]
 
             # modify directly p numpy data for avalanche region
-            da,dp = smoluchowski(t=t, p=p, D=D, mu=mu, E=E, t_a=t_a,
+            da,dp = smoluchowski(t=t, p=p, D=D, mu=mu, E=E, t_a=t_a, G=G,
                     a_region=a_region, d=d, charge_sign=charge_sign)
             ddata = append([da], dp.reshape(-1))
 
@@ -131,8 +133,10 @@ class Simulation:
                 progress.set_ratio(t / t_goal)
 
             # recording
-#            print(t, ' / ', self._t_last_sample, '+', t_s)
+            print(f'{t: .2e} / {self._t_last_sample + t_s: .2e}')
+            print(t_s)
             if t_s is not None and type(t_s) is not str and t > self._t_last_sample + t_s:
+                self._t_last_sample = t
                 if self.avalanche_only:
                     self.data.snapshot(t, a=a)
                 else:
@@ -219,7 +223,7 @@ class Simulation:
             # usefull variables
             data = self.data[t, 'p']
             i = int(round(t/t_order))
-            path = f'{prefix}{i:09d}.png'
+            path = f'{prefix}{n:08d}.png'
             title_values = {'t': '{:e}'.format(t), 'N': N, 'i': i, 'path': path,
                 'tf': si_value(round(t/t_order), t_prefix + r'\second')}
 
@@ -363,5 +367,4 @@ class Simulation:
 
 
         P = solve_ivp(fun=fun, t_span=x_span, y0=P0, t_eval=x)
-        print(p.shape)
         return P

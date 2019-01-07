@@ -162,7 +162,7 @@ def prepare_simulation(options, data, XYZ, particle):
     if options['mode'] == 'PDP':
         p0 = PDP_profile(options, data, XYZ)
     elif options['mode'] == 'DCR':
-        p0 = DCR_profile(options, data, XYZ, tau)
+        p0 = DCR_profile(options, data, XYZ)
 
     sim = simulation.Simulation(avalanche_only=options['avalanche'],
             particle=particle)
@@ -174,6 +174,7 @@ def prepare_simulation(options, data, XYZ, particle):
             V       = data['V'],
             D       = data['D_e'] if particle == 'electron' else data['D_h'],
             mu      = data['mu_e'] if particle == 'electron' else data['mu_h'],
+            G       = - (options['mode'] == 'DCR') * (data['R'] <= 0) * data['R'],
             a_e     = data['a_e'],
             a_h     = data['a_h'],
             padding = options['padding'],
@@ -234,8 +235,7 @@ def print_simulation_info(sim, data, t_goal, t_sampling, particle):
 
 
 def DCR_profile(options, data, XYZ):
-    shape = XYZ[0].shape
-    return np.zeros(shape)
+    return np.zeros_like(XYZ[0])
 
 
 def PDP_profile(options, data, XYZ):
@@ -257,6 +257,7 @@ def plot_static(sim, out):
             ('D', 'Diffusion coef.', 'D', r'\square\micro\meter'),
             ('mu', 'Mobility', r'\mu', r'\cubic\micro\meter\per\volt'),
             ('V', 'Potential', r'V', r'\volt'),
+            ('G', 'Generation', r'G', r'\per\square\micro\meter\second'),
             ('a_e', r'Electron avalanche coef.', r'\alpha_e', r'\per\micro\meter'),
             ('a_h', r'Hole avalanche coef.', r'\alpha_h', r'\per\micro\meter'),
             ('E', r'Electric field', 'E', r'\volt\per\micro\meter'),
@@ -305,14 +306,14 @@ def plot_dynamic(sim, out, avalanche=False):
     # dynamic fields
     print('* Exporting dynamic fields')
     l = np.max(sim.data['p0'])
-    title  = r'\textbf[{}]'.format(particle.capitalize()) + r'\\'
+    title  = r'\textbf[{}] '.format(particle.capitalize()) + r' \\'
     title += r' $t = {tf} \quad \mathrm[sum] = {sum} \\'
     title += r'\mathrm[min] = {min} \\ \mathrm[max] = {max}$'
     sim.export_dynamic_field_img(
             prefix=out, 
             log=False,
             colorbar=True,
-            clim=[-l, l],
+            clim='symmetric',
             title=title, 
             background=None)
 
@@ -329,7 +330,8 @@ if __name__ == '__main__':
 
     for particle in ('electron', 'hole'):
 
-        print('{:^80s}'.format('## ' + particle.upper() + ' ##'))
+        print('{:^80s}'.format('## ' + particle.upper() + ' - '
+            + options['mode'] + ' ##'))
 
         # simulation
         print('* Inititializing simulator')

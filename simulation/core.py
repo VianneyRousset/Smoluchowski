@@ -4,7 +4,7 @@ from .utils import divergence
 from scipy.ndimage.filters import laplace
 from numpy import sum, product, power, gradient, atleast_2d
 
-def smoluchowski(t, p, D, mu, E, a_region, d, charge_sign, t_a):
+def smoluchowski(t, p, D, mu, E, a_region, d, charge_sign, t_a, G):
 
     # math
     diff = divergence(atleast_2d(gradient(p, *d))*D, d)
@@ -12,7 +12,7 @@ def smoluchowski(t, p, D, mu, E, a_region, d, charge_sign, t_a):
     dp = diff + drift
 
     da = 1/t_a * p * a_region 
-    dp += -da
+    dp += - da
     da = sum(da) * product(d)
 
     return da,dp
