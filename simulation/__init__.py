@@ -86,7 +86,7 @@ class Simulation:
 
         from .core import smoluchowski 
         from scipy.integrate import solve_ivp
-        from numpy import inf, append 
+        from numpy import inf, append, arange, array
         import time
 
         start_time = time.time()
@@ -132,35 +132,23 @@ class Simulation:
             if not self.quiet:
                 progress.set_ratio(t / t_goal)
 
-            # recording
-            print(f'{t: .2e} / {self._t_last_sample + t_s: .2e}')
-            print(t_s)
-            if t_s is not None and type(t_s) is not str and t > self._t_last_sample + t_s:
-                self._t_last_sample = t
-                if self.avalanche_only:
-                    self.data.snapshot(t, a=a)
-                else:
-                    self.data.snapshot(t, p=p, a=a)
-                self._t = t
-            elif t_s == 'last': 
-                self._t = t
-                self._p = p
-
             return ddata.reshape(-1)
 
         # starting simulation
         if not self.quiet:
             print('* Starting simulation (goal: {:.2e}s)'.format(t_goal))
-        solve_ivp(fun, t_span=[0, t_goal], y0=append([0], self.data['p0'].reshape(-1)),
-                max_step=max_step, vectorized=True, rtol=1e-12)
+        sol = solve_ivp(fun, t_span=[0, t_goal], y0=append([0],
+            self.data['p0'].reshape(-1)), max_step=max_step, vectorized=True,
+            t_eval=arange(t_s, t_goal, t_s))
         progress.end()
 
         # recording last
-        if t_s == 'last':
-            if self.avalanche_only:
-                self.data.snapshot(t, a=self._a)
-            else:
-                self.data.snapshot(t, p=self._p, a=self._a)
+        if self.avalanche_only:
+            for t,a in zip(sol.t, sol.y[0]):
+                self.data.snapshot(t, a=y[0])
+        else:
+            for t,y in zip(sol.t, array(sol.y).T):
+                self.data.snapshot(t, a=y[0], p=y[1:].reshape(shape))
 
         if not self.quiet:
             print('* Done after {:.2f}s with {} snapshots.'.format(

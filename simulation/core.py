@@ -12,7 +12,7 @@ def smoluchowski(t, p, D, mu, E, a_region, d, charge_sign, t_a, G):
     dp = diff + drift
 
     da = 1/t_a * p * a_region 
-    dp += - da
+    dp += - da + G
     da = sum(da) * product(d)
 
     return da,dp
