@@ -108,7 +108,8 @@ def read_argv():
         options['padding']  = np.array(options['padding']).reshape(-1,2)
     if options['plot-dynamic']:
         options['t_sampling']   = float(options['t_sampling'])
-    options['wavelength']   = float(options['wavelength'])
+    if options['wavelength']:
+        options['wavelength'] = float(options['wavelength'])
     options['active_length']   = float(options['active_length'])
 
     return options,input_prefix[0]
@@ -313,7 +314,7 @@ def plot_dynamic(sim, out, avalanche=False):
             prefix=out, 
             log=False,
             colorbar=True,
-            clim='symmetric',
+            clim='auto',
             title=title, 
             background=None)
 

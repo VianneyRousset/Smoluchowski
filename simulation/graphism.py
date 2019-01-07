@@ -33,7 +33,7 @@ rc = {
 
 
 def save_image(path, data, colorbar=True, background=None, clim=None,
-        title=None, size=(3,3), dpi=500, xlim=None, ylim=None):
+        title=None, size=(3,3), dpi=500, xlim=None, ylim=None, sym=True):
 
     from numpy import abs, max
 
@@ -46,13 +46,13 @@ def save_image(path, data, colorbar=True, background=None, clim=None,
             extent = [*xlim, *ylim]
 
         if background is None:
-            if type(clim) is str and clim == 'symmetric':
+            if sym:
                 plt.imshow(data, extent=extent, cmap='coolwarm')
                 clim = plt.gci().get_clim()
                 clim = max(abs(clim))
                 plt.gci().set_clim([-clim, clim])
             else:
-                plt.imshow(data, clim=clim, extent=extent, cmap='coolwarm')
+                plt.imshow(data, clim=clim, extent=extent)
         else:
             plt.imshow(background, cmap='Greys', extent=extent)
             plt.imshow(colormap(data, clim=clim), extent=extent)
