@@ -86,7 +86,7 @@ class Simulation:
 
         from .core import smoluchowski 
         from scipy.integrate import solve_ivp
-        from numpy import inf, append, arange, array
+        from numpy import inf, append, array, logspace, log10
         import time
 
         start_time = time.time()
@@ -139,7 +139,7 @@ class Simulation:
             print('* Starting simulation (goal: {:.2e}s)'.format(t_goal))
         sol = solve_ivp(fun, t_span=[0, t_goal], y0=append([0],
             self.data['p0'].reshape(-1)), max_step=max_step, vectorized=True,
-            t_eval=arange(t_s, t_goal, t_s))
+            t_eval=logspace(log10(1e-12), log10(t_goal-1e-12), num=500))
         progress.end()
 
         # recording last
