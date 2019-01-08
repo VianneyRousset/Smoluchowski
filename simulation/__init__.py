@@ -145,7 +145,7 @@ class Simulation:
         # recording last
         if self.avalanche_only:
             for t,a in zip(sol.t, sol.y[0]):
-                self.data.snapshot(t, a=y[0])
+                self.data.snapshot(t, a=a)
         else:
             for t,y in zip(sol.t, array(sol.y).T):
                 self.data.snapshot(t, a=y[0], p=y[1:].reshape(shape))
